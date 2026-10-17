@@ -1,266 +1,266 @@
 <!DOCTYPE html>
-<html lang="my">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Call App</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <title>V Call App</title>
     <style>
-        * { box-sizing: border-box; }
-        html, body {
-            margin: 0; padding: 0;
-            width: 100vw; height: 100vh;
-            background: #000; color: #fff;
-            font-family: sans-serif;
-            overflow: hidden;
-        }
-        .controls {
-            position: absolute;
-            top: 8px; left: 8px; right: 8px;
-            z-index: 100;
-            display: flex; flex-direction: column; gap: 5px;
-            background: rgba(0, 0, 0, 0.75);
-            padding: 8px; border-radius: 8px;
-            backdrop-filter: blur(5px);
-        }
-        .input-group {
-            display: flex; gap: 5px;
-        }
-        input {
-            flex: 1; padding: 6px 8px; font-size: 13px;
-            border-radius: 4px; border: 1px solid #444;
-            background: #222; color: #fff;
-        }
-        button {
-            padding: 6px 12px; background: #4CAF50;
-            color: white; border: none; border-radius: 4px;
-            font-size: 13px; font-weight: bold; cursor: pointer;
-        }
-        button:disabled { background: #555; cursor: not-allowed; }
-        .btn-blue { background: #2196F3; }
-        .btn-red { background: #f44336; padding: 6px 8px; font-size: 11px; }
-        
-        .video-container {
-            width: 100vw; height: 100vh;
-            display: flex; position: relative;
-        }
-        video {
-            width: 100%; height: 100%;
-            object-fit: cover; background: #111;
-        }
-        #remote-video {
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%; z-index: 1;
-        }
-        #local-video {
-            position: absolute; bottom: 15px; right: 15px;
-            width: 90px; height: 120px;
-            border-radius: 8px; border: 2px solid #fff;
-            z-index: 10; object-fit: cover;
-        }
-        .status-box {
-            position: absolute;
-            bottom: 15px; left: 15px;
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid #444;
-            padding: 6px 10px; border-radius: 6px;
-            font-size: 12px; z-index: 10;
-            color: #ff9800;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        body { background-color: #efeae2; display: flex; flex-direction: column; height: 100vh; }
+        .app-header { background-color: #008069; color: white; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+        .user-info { display: flex; flex-direction: column; }
+        .app-title { font-size: 18px; font-weight: bold; }
+        #my-id-display { font-size: 12px; color: #b3dfd6; }
+        .call-actions button { background-color: #01a884; color: white; border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+        .video-container { display: none; background-color: #111b21; padding: 10px; position: relative; height: 250px; gap: 10px; justify-content: center; }
+        video { width: 48%; height: 100%; background-color: #222; border-radius: 8px; object-fit: cover; }
+        .end-call-btn { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background-color: #ea0038; color: white; border: none; padding: 8px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+        .chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; background-color: #efeae2; }
+        .message { max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 15px; position: relative; word-wrap: break-word; }
+        .message.sent { background-color: #d9fdd3; align-self: flex-end; }
+        .message.received { background-color: white; align-self: flex-start; }
+        .message img { max-width: 100%; border-radius: 6px; display: block; margin-bottom: 4px; }
+        .message .time { font-size: 10px; color: #667781; display: block; text-align: right; margin-top: 4px; }
+        .input-area { background-color: #f0f2f5; padding: 10px; display: flex; align-items: center; gap: 8px; }
+        .icon-btn { font-size: 22px; cursor: pointer; }
+        #file-input { display: none; }
+        #text-input { flex: 1; padding: 10px 16px; border: none; border-radius: 20px; outline: none; background-color: white; }
+        #send-btn { background-color: #00a884; color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 16px; font-weight: bold; }
     </style>
+    
+    <!-- Firebase v8 Libraries -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
 </head>
 <body>
 
-    <div class="controls">
-        <div class="input-group">
-            <input type="text" id="my-custom-id" placeholder="ကိုယ့် ID အမည် (ဥပမာ - 777)">
-            <button id="set-id-btn" class="btn-blue">မှတ်မည်</button>
-            <button id="reset-id-btn" class="btn-red" title="ID ပြောင်းရန်">ဖျက်ရန်</button>
+    <div class="app-header">
+        <div class="user-info">
+            <span class="app-title">V Call (ထွန်းထွန်းနောင်)</span>
+            <span id="my-id-display">လိုင်းချိတ်ဆက်နေသည်...</span>
         </div>
-        <div class="input-group">
-            <input type="text" id="peer-id-input" placeholder="ချိတ်မည့်သူ့ ID ထည့်ရန်" disabled>
-            <button id="connect-btn" disabled>ခေါ်ဆိုမည်</button>
+        <div class="call-actions">
+            <button id="call-btn">📞 Video Call</button>
         </div>
     </div>
 
-    <div class="video-container">
-        <video id="remote-video" autoplay playsinline></video>
+    <div class="video-container" id="video-area">
         <video id="local-video" autoplay muted playsinline></video>
-        <div class="status-box" id="status-text">အခြေအနေ - ကင်မရာဖွင့်နေသည်...</div>
+        <video id="remote-video" autoplay playsinline></video>
+        <button class="end-call-btn" id="end-call-btn">ဖုန်းချရန်</button>
+    </div>
+
+    <div class="chat-container" id="chat-container"></div>
+
+    <div class="input-area">
+        <label class="icon-btn" for="file-input">📷</label>
+        <input type="file" id="file-input" accept="image/*">
+        <input type="text" id="text-input" placeholder="စာရိုက်ပါ...">
+        <button id="send-btn">➔</button>
     </div>
 
     <script>
-        const localVideo = document.getElementById('local-video');
-        const remoteVideo = document.getElementById('remote-video');
-        const myCustomIdInput = document.getElementById('my-custom-id');
-        const setIdBtn = document.getElementById('set-id-btn');
-        const resetIdBtn = document.getElementById('reset-id-btn');
-        const peerIdInput = document.getElementById('peer-id-input');
-        const connectBtn = document.getElementById('connect-btn');
-        const statusText = document.getElementById('status-text');
+        // သင့်ရဲ့ Firebase Configuration (Database URL အမှန်ပါဝင်သည်)
+        const firebaseConfig = {
+            apiKey: "AIzaSyD_obkR0Gcuw9LiVkpvbrj4BwAbsin4eig",
+            authDomain: "my-vcall-app.firebaseapp.com",
+            databaseURL: "https://my-vcall-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "my-vcall-app",
+            storageBucket: "my-vcall-app.firebasestorage.app",
+            messagingSenderId: "40185075160",
+            appId: "1:40185075160:web:980195d514b1f53fe00ead",
+            measurementId: "G-84FFEXTMLX"
+        };
+
+        // Firebase Initialize လုပ်ခြင်း
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const storage = firebase.storage();
+
+        // အသုံးပြုသူ ID သတ်မှတ်ခြင်း
+        const myUserId = "User_" + Math.floor(1000 + Math.random() * 9000);
+        document.getElementById('my-id-display').innerText = "သင့် ID: " + myUserId;
+
+        const chatContainer = document.getElementById('chat-container');
+        const textInput = document.getElementById('text-input');
+        const fileInput = document.getElementById('file-input');
+        const sendBtn = document.getElementById('send-btn');
+        const callBtn = document.getElementById('call-btn');
+        const endCallBtn = document.getElementById('end-call-btn');
+        const videoArea = document.getElementById('video-area');
 
         let localStream;
-        let peer;
-        let ringAudioCtx;
-        let ringInterval;
-        let wakeLock = null;
+        let peerConnection;
+        const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+        let activeCallId = null;
 
-        // ဖုန်းစခရင် အလိုအလျောက် မပိတ်သွားစေရန် တားဆီးသည့်စနစ် (Wake Lock)
-        async function requestWakeLock() {
+        // --- စာပို့စနစ် ---
+        function sendMessage(text, imageUrl = null) {
+            const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            database.ref('messages').push({
+                sender: myUserId,
+                text: text,
+                imageUrl: imageUrl,
+                time: timeString
+            });
+            textInput.value = '';
+            fileInput.value = '';
+        }
+
+        sendBtn.addEventListener('click', async () => {
+            const text = textInput.value.trim();
+            const file = fileInput.files[0];
+            if (!text && !file) return;
+
+            sendBtn.disabled = true;
+            if (file) {
+                const fRef = storage.ref('images/' + Date.now() + '_' + file.name);
+                try {
+                    await fRef.put(file);
+                    const url = await fRef.getDownloadURL();
+                    sendMessage(text, url);
+                } catch(e) { 
+                    alert("Error uploading image"); 
+                }
+            } else {
+                sendMessage(text);
+            }
+            sendBtn.disabled = false;
+        });
+
+        textInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendBtn.click(); });
+
+        database.ref('messages').on('child_added', (snapshot) => {
+            const data = snapshot.val();
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${data.sender === myUserId ? 'sent' : 'received'}`;
+            let content = data.imageUrl ? `<img src="${data.imageUrl}">` : '';
+            content += data.text ? `<p>${data.text}</p>` : '';
+            content += `<span class="time">${data.time}</span>`;
+            msgDiv.innerHTML = content;
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        });
+
+        // --- Video Call စနစ် ---
+        async function startWebcam() {
             try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    console.log('Screen Wake Lock is active');
-                }
-            } catch (err) {
-                console.error(`${err.name}, ${err.message}`);
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                document.getElementById('local-video').srcObject = localStream;
+                videoArea.style.display = 'flex';
+            } catch (e) {
+                alert("ကင်မရာ သို့မဟုတ် မိုက်ခရိုဖုန်း ခွင့်ပြုချက် လိုအပ်ပါသည်");
             }
         }
 
-        // ဖုန်း Tab ပြန်ပြောင်းလာပါက Wake Lock ကို ပြန်လည်အသက်သွင်းရန်
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                await requestWakeLock();
-            }
-        });
-
-        function startRinging() {
-            try {
-                if (ringInterval) return;
-                ringAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                ringInterval = setInterval(() => {
-                    if (!ringAudioCtx) return;
-                    let osc = ringAudioCtx.createOscillator();
-                    let gain = ringAudioCtx.createGain();
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(440, ringAudioCtx.currentTime);
-                    osc.frequency.setValueAtTime(480, ringAudioCtx.currentTime + 0.15);
-                    gain.gain.setValueAtTime(0.2, ringAudioCtx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.01, ringAudioCtx.currentTime + 0.4);
-                    osc.connect(gain);
-                    gain.connect(ringAudioCtx.destination);
-                    osc.start();
-                    osc.stop(ringAudioCtx.currentTime + 0.4);
-                }, 1000);
-            } catch(e) { console.log(e); }
-        }
-
-        function stopRinging() {
-            if (ringInterval) {
-                clearInterval(ringInterval);
-                ringInterval = null;
-            }
-            if (ringAudioCtx) {
-                ringAudioCtx.close();
-                ringAudioCtx = null;
-            }
-        }
-
-        function initPeer(id) {
-            if (peer) {
-                peer.destroy();
-            }
-
-            peer = new Peer(id);
-
-            peer.on('open', (assignedId) => {
-                statusText.innerText = "ကိုယ့် ID: " + assignedId;
-                myCustomIdInput.disabled = true;
-                setIdBtn.disabled = true;
-                peerIdInput.disabled = false;
-                connectBtn.disabled = false;
-            });
-
-            peer.on('error', (err) => {
-                if (err.type === 'unavailable-id') {
-                    alert('ဤ ID ကို အခြားသူ ယူထားပြီးပါပြီ။ နာမည်အသစ်ပြောင်းပါ။');
-                    localStorage.removeItem('saved_peer_id');
-                    myCustomIdInput.disabled = false;
-                    setIdBtn.disabled = false;
-                } else {
-                    alert('Error: ' + err.type);
-                }
-            });
-
-            peer.on('call', (call) => {
-                statusText.innerText = "ဖုန်းဝင်လာပါပြီ...";
-                startRinging();
-
-                call.answer(localStream);
-                
-                call.on('stream', (remoteStream) => {
-                    stopRinging();
-                    remoteVideo.srcObject = remoteStream;
-                    statusText.innerText = "ချိတ်ဆက်နေပါပြီ (Connected)";
-                    statusText.style.color = "#4CAF50";
-                });
-            });
-        }
-
-        // ကင်မရာဖွင့်ခြင်းနှင့် Wake Lock တောင်းခံခြင်း
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(stream => {
-                localStream = stream;
-                localVideo.srcObject = stream;
-                
-                // စခရင်အမြဲလင်းနေစေရန် စတင်တောင်းခံမည်
-                requestWakeLock();
-
-                const savedId = localStorage.getItem('saved_peer_id');
-                if (savedId) {
-                    myCustomIdInput.value = savedId;
-                    statusText.innerText = "သိမ်းဆည်းထားသော ID ဖြင့် ချိတ်ဆက်နေသည်...";
-                    initPeer(savedId);
-                } else {
-                    statusText.innerText = "ကင်မရာပွင့်ပြီ၊ ID အသစ်သတ်မှတ်ပါ";
-                }
-            })
-            .catch(err => {
-                alert('ကင်မရာ (သို့) မိုက်ခရိုဖုန်း ခွင့်ပြုချက်မရှိပါ။');
-            });
-
-        setIdBtn.addEventListener('click', () => {
-            const customId = myCustomIdInput.value.trim();
-            if (!customId) {
-                alert('ကျေးဇူးပြု၍ ကိုယ့် ID အမည်ကို ထည့်ပါ။');
-                return;
-            }
-            if (!localStream) {
-                alert('ကင်မရာ ဖွင့်ခွင့်ပြုချက် မရှိသေးပါ။');
-                return;
-            }
-
-            localStorage.setItem('saved_peer_id', customId);
-            initPeer(customId);
-        });
-
-        resetIdBtn.addEventListener('click', () => {
-            localStorage.removeItem('saved_peer_id');
-            myCustomIdInput.disabled = false;
-            setIdBtn.disabled = false;
-            peerIdInput.disabled = true;
-            connectBtn.disabled = true;
-            myCustomIdInput.value = "";
-            statusText.innerText = "ID ကို ဖျက်လိုက်ပါပြီ။ အသစ်ထည့်ပါ။";
-            if (peer) peer.destroy();
-        });
-
-        connectBtn.addEventListener('click', () => {
-            const targetId = peerIdInput.value.trim();
-            if (!targetId) {
-                alert('ချိတ်မည့်သူ၏ ID ကို ထည့်ပါ။');
-                return;
-            }
-
-            statusText.innerText = targetId + " သို့ ခေါ်ဆိုနေသည်...";
-            const call = peer.call(targetId, localStream);
+        async function createPeer(callId) {
+            peerConnection = new RTCPeerConnection(rtcConfig);
             
-            call.on('stream', (remoteStream) => {
-                stopRinging();
-                remoteVideo.srcObject = remoteStream;
-                statusText.innerText = "ချိတ်ဆက်နေပါပြီ (Connected)";
-                statusText.style.color = "#4CAF50";
+            if(localStream) {
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            }
+            
+            peerConnection.ontrack = (event) => {
+                if (event.streams && event.streams[0]) {
+                    document.getElementById('remote-video').srcObject = event.streams[0];
+                }
+            };
+            
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    database.ref(`calls/${callId}/candidates`).push(event.candidate.toJSON());
+                }
+            };
+        }
+
+        // ဖုန်းစတင်ခေါ်ဆိုခြင်း (Caller Side)
+        callBtn.addEventListener('click', async () => {
+            const targetId = prompt("သင်ခေါ်ဆိုလိုသော တစ်ဖက်လူ၏ ID ကို ရိုက်ထည့်ပါ:");
+            if (!targetId || targetId.trim() === "") return;
+
+            await startWebcam();
+            activeCallId = myUserId + "_" + targetId.trim();
+            await createPeer(activeCallId);
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            await database.ref(`calls/${activeCallId}`).set({
+                offer: { type: offer.type, sdp: offer.sdp },
+                caller: myUserId,
+                target: targetId.trim(),
+                status: "calling"
             });
+
+            // တစ်ဖက်လူ ဖုန်းလက်ခံလိုက်သည့်အချိန် (Answer ကို စောင့်ဖတ်ခြင်း)
+            database.ref(`calls/${activeCallId}/answer`).on('value', async (snapshot) => {
+                const answer = snapshot.val();
+                if (answer && peerConnection && !peerConnection.currentRemoteDescription) {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                }
+            });
+
+            // ICE Candidates များကို ချိတ်ဆက်ပေးခြင်း
+            database.ref(`calls/${activeCallId}/candidates`).on('child_added', (snapshot) => {
+                const candidate = new RTCIceCandidate(snapshot.val());
+                if (peerConnection) {
+                    peerConnection.addIceCandidate(candidate).catch(e => {});
+                }
+            });
+        });
+
+        // ဖုန်းဝင်လာသည်ကို လက်ခံခြင်း (Receiver Side)
+        database.ref('calls').orderByChild('target').equalTo(myUserId).on('child_added', async (snapshot) => {
+            const callData = snapshot.val();
+            const callId = snapshot.key;
+
+            if (callData && callData.status === "calling") {
+                const accept = confirm(`${callData.caller} ထံမှ Video Call ဝင်လာပါသည်... လက်ခံမည်လား?`);
+                if (accept) {
+                    activeCallId = callId;
+                    await startWebcam();
+                    await createPeer(activeCallId);
+
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(callData.offer));
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+
+                    await database.ref(`calls/${activeCallId}`).update({
+                        answer: { type: answer.type, sdp: answer.sdp },
+                        status: "answered"
+                    });
+
+                    // ICE Candidates များကို ချိတ်ဆက်ပေးခြင်း
+                    database.ref(`calls/${activeCallId}/candidates`).on('child_added', (snapshot) => {
+                        const candidate = new RTCIceCandidate(snapshot.val());
+                        if (peerConnection) {
+                            peerConnection.addIceCandidate(candidate).catch(e => {});
+                        }
+                    });
+                } else {
+                    database.ref(`calls/${activeCallId}`).update({ status: "rejected" });
+                }
+            }
+        });
+
+        // ဖုန်းချခြင်းစနစ်
+        endCallBtn.addEventListener('click', () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            videoArea.style.display = 'none';
+            document.getElementById('local-video').srcObject = null;
+            document.getElementById('remote-video').srcObject = null;
+
+            if (activeCallId) {
+                database.ref(`calls/${activeCallId}`).remove();
+                activeCallId = null;
+            }
         });
     </script>
 </body>
