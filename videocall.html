@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Call App</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0;
+            width: 100vw; height: 100vh;
+            background: #000; color: #fff;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+        .controls {
+            position: absolute;
+            top: 8px; left: 8px; right: 8px;
+            z-index: 100;
+            display: flex; flex-direction: column; gap: 5px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 8px; border-radius: 8px;
+            backdrop-filter: blur(5px);
+        }
+        .input-group {
+            display: flex; gap: 5px;
+        }
+        input {
+            flex: 1; padding: 6px 8px; font-size: 13px;
+            border-radius: 4px; border: 1px solid #444;
+            background: #222; color: #fff;
+        }
+        button {
+            padding: 6px 12px; background: #4CAF50;
+            color: white; border: none; border-radius: 4px;
+            font-size: 13px; font-weight: bold; cursor: pointer;
+        }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .btn-blue { background: #2196F3; }
+        .btn-red { background: #f44336; padding: 6px 8px; font-size: 11px; }
+        
+        .video-container {
+            width: 100vw; height: 100vh;
+            display: flex; position: relative;
+        }
+        video {
+            width: 100%; height: 100%;
+            object-fit: cover; background: #111;
+        }
+        #remote-video {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; z-index: 1;
+        }
+        #local-video {
+            position: absolute; bottom: 15px; right: 15px;
+            width: 90px; height: 120px;
+            border-radius: 8px; border: 2px solid #fff;
+            z-index: 10; object-fit: cover;
+        }
+        .status-box {
+            position: absolute;
+            bottom: 15px; left: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #444;
+            padding: 6px 10px; border-radius: 6px;
+            font-size: 12px; z-index: 10;
+            color: #ff9800;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <div class="input-group">
+            <input type="text" id="my-custom-id" placeholder="ကိုယ့် ID အမည် (ဥပမာ - 777)">
+            <button id="set-id-btn" class="btn-blue">မှတ်မည်</button>
+            <button id="reset-id-btn" class="btn-red" title="ID ပြောင်းရန်">ဖျက်ရန်</button>
+        </div>
+        <div class="input-group">
+            <input type="text" id="peer-id-input" placeholder="ချိတ်မည့်သူ့ ID ထည့်ရန်" disabled>
+            <button id="connect-btn" disabled>ခေါ်ဆိုမည်</button>
+        </div>
+    </div>
+
+    <div class="video-container">
+        <video id="remote-video" autoplay playsinline></video>
+        <video id="local-video" autoplay muted playsinline></video>
+        <div class="status-box" id="status-text">အခြေအနေ - ကင်မရာဖွင့်နေသည်...</div>
+    </div>
+
+    <script>
+        const localVideo = document.getElementById('local-video');
+        const remoteVideo = document.getElementById('remote-video');
+        const myCustomIdInput = document.getElementById('my-custom-id');
+        const setIdBtn = document.getElementById('set-id-btn');
+        const resetIdBtn = document.getElementById('reset-id-btn');
+        const peerIdInput = document.getElementById('peer-id-input');
+        const connectBtn = document.getElementById('connect-btn');
+        const statusText = document.getElementById('status-text');
+
+        let localStream;
+        let peer;
+        let ringAudioCtx;
+        let ringInterval;
+        let wakeLock = null;
+
+        // ဖုန်းစခရင် အလိုအလျောက် မပိတ်သွားစေရန် တားဆီးသည့်စနစ် (Wake Lock)
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Screen Wake Lock is active');
+                }
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+            }
+        }
+
+        // ဖုန်း Tab ပြန်ပြောင်းလာပါက Wake Lock ကို ပြန်လည်အသက်သွင်းရန်
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
+
+        function startRinging() {
+            try {
+                if (ringInterval) return;
+                ringAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                ringInterval = setInterval(() => {
+                    if (!ringAudioCtx) return;
+                    let osc = ringAudioCtx.createOscillator();
+                    let gain = ringAudioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, ringAudioCtx.currentTime);
+                    osc.frequency.setValueAtTime(480, ringAudioCtx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.2, ringAudioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ringAudioCtx.currentTime + 0.4);
+                    osc.connect(gain);
+                    gain.connect(ringAudioCtx.destination);
+                    osc.start();
+                    osc.stop(ringAudioCtx.currentTime + 0.4);
+                }, 1000);
+            } catch(e) { console.log(e); }
+        }
+
+        function stopRinging() {
+            if (ringInterval) {
+                clearInterval(ringInterval);
+                ringInterval = null;
+            }
+            if (ringAudioCtx) {
+                ringAudioCtx.close();
+                ringAudioCtx = null;
+            }
+        }
+
+        function initPeer(id) {
+            if (peer) {
+                peer.destroy();
+            }
+
+            peer = new Peer(id);
+
+            peer.on('open', (assignedId) => {
+                statusText.innerText = "ကိုယ့် ID: " + assignedId;
+                myCustomIdInput.disabled = true;
+                setIdBtn.disabled = true;
+                peerIdInput.disabled = false;
+                connectBtn.disabled = false;
+            });
+
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    alert('ဤ ID ကို အခြားသူ ယူထားပြီးပါပြီ။ နာမည်အသစ်ပြောင်းပါ။');
+                    localStorage.removeItem('saved_peer_id');
+                    myCustomIdInput.disabled = false;
+                    setIdBtn.disabled = false;
+                } else {
+                    alert('Error: ' + err.type);
+                }
+            });
+
+            peer.on('call', (call) => {
+                statusText.innerText = "ဖုန်းဝင်လာပါပြီ...";
+                startRinging();
+
+                call.answer(localStream);
+                
+                call.on('stream', (remoteStream) => {
+                    stopRinging();
+                    remoteVideo.srcObject = remoteStream;
+                    statusText.innerText = "ချိတ်ဆက်နေပါပြီ (Connected)";
+                    statusText.style.color = "#4CAF50";
+                });
+            });
+        }
+
+        // ကင်မရာဖွင့်ခြင်းနှင့် Wake Lock တောင်းခံခြင်း
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                localStream = stream;
+                localVideo.srcObject = stream;
+                
+                // စခရင်အမြဲလင်းနေစေရန် စတင်တောင်းခံမည်
+                requestWakeLock();
+
+                const savedId = localStorage.getItem('saved_peer_id');
+                if (savedId) {
+                    myCustomIdInput.value = savedId;
+                    statusText.innerText = "သိမ်းဆည်းထားသော ID ဖြင့် ချိတ်ဆက်နေသည်...";
+                    initPeer(savedId);
+                } else {
+                    statusText.innerText = "ကင်မရာပွင့်ပြီ၊ ID အသစ်သတ်မှတ်ပါ";
+                }
+            })
+            .catch(err => {
+                alert('ကင်မရာ (သို့) မိုက်ခရိုဖုန်း ခွင့်ပြုချက်မရှိပါ။');
+            });
+
+        setIdBtn.addEventListener('click', () => {
+            const customId = myCustomIdInput.value.trim();
+            if (!customId) {
+                alert('ကျေးဇူးပြု၍ ကိုယ့် ID အမည်ကို ထည့်ပါ။');
+                return;
+            }
+            if (!localStream) {
+                alert('ကင်မရာ ဖွင့်ခွင့်ပြုချက် မရှိသေးပါ။');
+                return;
+            }
+
+            localStorage.setItem('saved_peer_id', customId);
+            initPeer(customId);
+        });
+
+        resetIdBtn.addEventListener('click', () => {
+            localStorage.removeItem('saved_peer_id');
+            myCustomIdInput.disabled = false;
+            setIdBtn.disabled = false;
+            peerIdInput.disabled = true;
+            connectBtn.disabled = true;
+            myCustomIdInput.value = "";
+            statusText.innerText = "ID ကို ဖျက်လိုက်ပါပြီ။ အသစ်ထည့်ပါ။";
+            if (peer) peer.destroy();
+        });
+
+        connectBtn.addEventListener('click', () => {
+            const targetId = peerIdInput.value.trim();
+            if (!targetId) {
+                alert('ချိတ်မည့်သူ၏ ID ကို ထည့်ပါ။');
+                return;
+            }
+
+            statusText.innerText = targetId + " သို့ ခေါ်ဆိုနေသည်...";
+            const call = peer.call(targetId, localStream);
+            
+            call.on('stream', (remoteStream) => {
+                stopRinging();
+                remoteVideo.srcObject = remoteStream;
+                statusText.innerText = "ချိတ်ဆက်နေပါပြီ (Connected)";
+                statusText.style.color = "#4CAF50";
+            });
+        });
+    </script>
+</body>
+</html>
